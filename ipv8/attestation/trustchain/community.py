@@ -368,7 +368,7 @@ class TrustChainCommunity(Community):
             listener.received_block(block)
 
     @synchronized
-    async def process_half_block(self, blk, peer):
+    async def process_half_block(self, blk, peer, attempts=1):
         """
         Process a received half block.
         """
@@ -376,6 +376,25 @@ class TrustChainCommunity(Community):
         self.logger.info("Block validation result %s, %s, (%s)", validation[0], validation[1], blk)
         if validation[0] == ValidationResult.invalid:
             raise RuntimeError(f"Block could not be validated: {validation[0]}, {validation[1]}")
+
+        if validation[0] == ValidationResult.missing:
+            # If we already attempted the crawl the blocks probably don't exist, which means the block is invalid
+            if (attempts == 0):
+                return
+
+            # We should only put in the effort to crawl for missing information if the block is addressed to me, if not
+            # we don't know whether it is valid and won't store
+            if (blk.link_public_key == self.my_peer.public_key.key_to_bin() and
+                    self.persistence.get_linked(block) == None):
+                # Crawl for the missing blocks
+                for blocks in result[1]:
+                    #crawl for missing blocks
+                    await self.send_crawl_request(peer,
+                            blocks.public_key, blocks.first, blocks.last,
+                            for_half_block=blk)
+                    # Validate again
+                    return processHalfBlock(block, peer, attempts-1)
+            return
 
         # Check if we are waiting for this signature response
         link_block_id_int = int(hexlify(blk.linked_block_id), 16) % 100000000
