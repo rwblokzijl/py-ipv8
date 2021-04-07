@@ -564,6 +564,13 @@ class ValidationResult(object):
         """
         pass
 
+    @staticmethod
+    def missing():
+        """
+        We dont know if we should sign until more information is requested
+        """
+        pass
+
     def __init__(self):
         """
         Create a new ValidationResult instance with valid state and no errors.
@@ -581,3 +588,4 @@ class ValidationResult(object):
         """
         self.state = ValidationResult.invalid
         self.errors.append(reason)
+

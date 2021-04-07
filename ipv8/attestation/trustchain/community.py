@@ -368,7 +368,7 @@ class TrustChainCommunity(Community):
             listener.received_block(block)
 
     @synchronized
-    async def process_half_block(self, blk, peer, attempts=1):
+    async def process_half_block(self, blk, peer):
         """
         Process a received half block.
         """
@@ -377,24 +377,6 @@ class TrustChainCommunity(Community):
         if validation[0] == ValidationResult.invalid:
             raise RuntimeError(f"Block could not be validated: {validation[0]}, {validation[1]}")
 
-        if validation[0] == ValidationResult.missing:
-            # If we already attempted the crawl the blocks probably don't exist, which means the block is invalid
-            if (attempts == 0):
-                return
-
-            # We should only put in the effort to crawl for missing information if the block is addressed to me, if not
-            # we don't know whether it is valid and won't store
-            if (blk.link_public_key == self.my_peer.public_key.key_to_bin() and
-                    self.persistence.get_linked(block) == None):
-                # Crawl for the missing blocks
-                for blocks in result[1]:
-                    #crawl for missing blocks
-                    await self.send_crawl_request(peer,
-                            blocks.public_key, blocks.first, blocks.last,
-                            for_half_block=blk)
-                    # Validate again
-                    return processHalfBlock(block, peer, attempts-1)
-            return
 
         # Check if we are waiting for this signature response
         link_block_id_int = int(hexlify(blk.linked_block_id), 16) % 100000000
@@ -422,6 +404,18 @@ class TrustChainCommunity(Community):
         if not should_sign:
             self.logger.info("Not signing block %s", blk)
             return
+
+        # Crawl for information that might make the block eventually valid
+        if validation[0] == ValidationResult.missing:
+            # Crawl for the missing blocks
+            await asyncio.wait([self.send_crawl_request(peer, blocks.public_key, blocks.first, blocks.last, for_half_block=blk) for blocks in result[1]])
+
+            # Validate again
+            new_validation = blk.validate(self.persistence)
+            if validation != new_validation: # new information
+                return process_half_block(blk, peer) # retry the validation from
+            else: #No new information, just stop
+                return
 
         # It is important that the request matches up with its previous block, gaps cannot be tolerated at
         # this point. We already dropped invalids, so here we delay this message if the result is partial,
