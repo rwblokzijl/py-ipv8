@@ -281,7 +281,13 @@ class TrustChainDB(Database):
             db_result = list(self.execute(query, (start_seq_num, end_seq_num, database_blob(public_key), limit,
                                                   start_seq_num, end_seq_num, database_blob(public_key), limit),
                                           fetch_all=True))
-            return [self.get_block_class(db_item[0])(db_item) for db_item in db_result]
+
+            blocks = [self.get_block_class(db_item[0])(db_item) for db_item in db_result]
+            linked = []
+            for block in blocks:
+                if block.public_key == public_key and block.link_sequence_number != 0: #all unfetched linked blocks
+                    linked += self.get_all_linked(block)
+            return blocks + linked
 
     def get_recent_blocks(self, limit=10, offset=0):
         """

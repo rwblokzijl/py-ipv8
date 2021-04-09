@@ -6,7 +6,7 @@ Every node has a chain and these chains intertwine by blocks shared by chains.
 import logging
 import random
 import struct
-from asyncio import Future, ensure_future, get_event_loop
+from asyncio import Future, ensure_future, get_event_loop, wait
 from binascii import hexlify, unhexlify
 from collections import deque
 from functools import wraps
@@ -35,7 +35,6 @@ def synchronized(f):
         with self.receive_block_lock:
             return f(self, *args, **kwargs)
     return wrapper
-
 
 class TrustChainCommunity(Community):
     """
@@ -377,7 +376,6 @@ class TrustChainCommunity(Community):
         if validation[0] == ValidationResult.invalid:
             raise RuntimeError(f"Block could not be validated: {validation[0]}, {validation[1]}")
 
-
         # Check if we are waiting for this signature response
         link_block_id_int = int(hexlify(blk.linked_block_id), 16) % 100000000
         if self.request_cache.has('sign', link_block_id_int):
@@ -408,14 +406,24 @@ class TrustChainCommunity(Community):
         # Crawl for information that might make the block eventually valid
         if validation[0] == ValidationResult.missing:
             # Crawl for the missing blocks
-            await asyncio.wait([self.send_crawl_request(peer, blocks.public_key, blocks.first, blocks.last, for_half_block=blk) for blocks in result[1]])
+            self.logger.info(f"Request block could not be validated sufficiently, crawling requester. {validation}",)
+            if not self.request_cache.has("crawl", blk.hash_number):
+                try:
+                    await wait([self.send_crawl_request(peer, blocks.public_key, blocks.first, blocks.last, for_half_block=blk) for blocks in validation[1]])
+                except Exception as e:
+                    self.logger.error("Error while sending crawl request (error: %s)", e)
+                    return
 
-            # Validate again
-            new_validation = blk.validate(self.persistence)
-            if validation != new_validation: # new information
-                return process_half_block(blk, peer) # retry the validation from
-            else: #No new information, just stop
-                return
+                # return await self.process_half_block(blk, peer) # retry the validation
+
+                # Validate again if new info
+                new_validation = blk.validate(self.persistence)
+                if validation != new_validation:
+                    self.logger.info("Crawl resulted in new infromation, will process again")
+                    return await self.process_half_block(blk, peer) # retry the validation
+                else:
+                    self.logger.warning(f"Crawl resulted in no new information for {blk}, {validation}")
+                    return
 
         # It is important that the request matches up with its previous block, gaps cannot be tolerated at
         # this point. We already dropped invalids, so here we delay this message if the result is partial,

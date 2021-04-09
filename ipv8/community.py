@@ -218,7 +218,10 @@ class Community(EZPackOverlay):
         if interface == "UDPIPv4":
             return UDPv4Address(*self._get_lan_address())
         elif interface == "UDPIPv6":
-            return UDPv6Address(self.get_ipv6_address(), self.endpoint.get_address(interface)[1])
+            address = self.get_ipv6_address()
+            if address is None:
+                return None
+            return UDPv6Address(address, self.endpoint.get_address(interface)[1])
         else:
             return None
 

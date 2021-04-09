@@ -19,8 +19,8 @@ class BlockCache(object):
         """
         if block.public_key == self.public_key:
             self.blocks[block.sequence_number] = block
-        else:
-            self.linked_blocks[block.sequence_number] = block
+        elif block.link_sequence_number != 0:
+            self.linked_blocks[block.link_sequence_number] = block
 
     def get_range(self, start_seq_num, end_seq_num):
         missing = self.get_missing_in_range(start_seq_num, end_seq_num)
@@ -47,7 +47,7 @@ class BlockCache(object):
             if my_block and seq_num not in self.linked_blocks:
                 linked_block = self.database.get_linked(my_block)
                 if linked_block:
-                    self.add(linked_block)
+                    self.linked_blocks[seq_num] = linked_block
                 else:
                     # Even if the linked block does not exist, we add a None value anyway.
                     # We do so to indicate that we have actually checked whether it exists.
