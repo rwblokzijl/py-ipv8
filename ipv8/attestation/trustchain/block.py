@@ -569,7 +569,7 @@ class ValidationResult(object):
     @staticmethod
     def missing():
         """
-        We dont know if we should sign until more information is requested
+        We dont know if we should sign until more information is requested, include BlockRange instead of error
         """
         pass
 
