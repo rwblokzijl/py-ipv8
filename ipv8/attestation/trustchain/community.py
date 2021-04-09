@@ -406,7 +406,7 @@ class TrustChainCommunity(Community):
         # Crawl for information that might make the block eventually valid
         if validation[0] == ValidationResult.missing:
             # Crawl for the missing blocks
-            self.logger.info(f"Request block could not be validated sufficiently, crawling requester. {validation}",)
+            self.logger.info(f"Request block could not be validated sufficiently, crawling requester. {validation}")
             if not self.request_cache.has("crawl", blk.hash_number):
                 try:
                     await wait([self.send_crawl_request(peer, blocks.public_key, blocks.first, blocks.last, for_half_block=blk) for blocks in validation[1]])
@@ -414,16 +414,13 @@ class TrustChainCommunity(Community):
                     self.logger.error("Error while sending crawl request (error: %s)", e)
                     return
 
-                # return await self.process_half_block(blk, peer) # retry the validation
-
                 # Validate again if new info
                 new_validation = blk.validate(self.persistence)
                 if validation != new_validation:
                     self.logger.info("Crawl resulted in new infromation, will process again")
                     return await self.process_half_block(blk, peer) # retry the validation
                 else:
-                    self.logger.warning(f"Crawl resulted in no new information for {blk}, {validation}")
-                    return
+                    raise RuntimeError(f"Block could not be validated: {validation[0]}, {validation[1]}")
 
         # It is important that the request matches up with its previous block, gaps cannot be tolerated at
         # this point. We already dropped invalids, so here we delay this message if the result is partial,
