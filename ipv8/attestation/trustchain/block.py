@@ -1,8 +1,10 @@
 import logging
 import time
-from binascii import hexlify
+
+from binascii    import hexlify
 from collections import namedtuple
-from hashlib import sha256
+from dataclasses import dataclass, field
+from hashlib     import sha256
 
 from .payload import HalfBlockPayload
 from ...database import database_blob
@@ -588,4 +590,17 @@ class ValidationResult(object):
         """
         self.state = ValidationResult.invalid
         self.errors.append(reason)
+
+@dataclass
+class BlockRange:
+    public_key: bytes
+    first: int
+    last: int
+    reason: str = field(default="", compare=False)
+
+    def __repr__(self):
+        return f"{hexlify(self.public_key)[-8:]}:{self.first}-{self.last} {self.reason}"
+
+    def __str__(self):
+        return self.__repr__()
 
